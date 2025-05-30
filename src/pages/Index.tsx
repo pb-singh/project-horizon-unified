@@ -1,14 +1,19 @@
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useTasks } from '@/hooks/useTasks';
 import { TaskCard } from '@/components/TaskCard';
 import { CreateTaskDialog } from '@/components/CreateTaskDialog';
 import { BottomNavigation } from '@/components/BottomNavigation';
+import { OnboardingCarousel } from '@/components/OnboardingCarousel';
+import { FileManager } from '@/components/FileManager';
+import { SettingsScreen } from '@/components/SettingsScreen';
+import { TeamMembers } from '@/components/TeamMembers';
+import { ActivityFeed } from '@/components/ActivityFeed';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
-import { CalendarIcon, Plus, Search, CheckCircle2, Clock, Flag } from 'lucide-react';
+import { CalendarIcon, Plus, Search, CheckCircle2, Clock, Flag, LayoutGrid, List } from 'lucide-react';
 import { format, startOfWeek, endOfWeek, eachDayOfInterval, isToday, isSameDay } from 'date-fns';
 import { cn } from '@/lib/utils';
 
@@ -17,6 +22,16 @@ const Index = () => {
   const [activeTab, setActiveTab] = useState('today');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedDate, setSelectedDate] = useState(new Date());
+  const [showOnboarding, setShowOnboarding] = useState(false);
+  const [calendarView, setCalendarView] = useState<'calendar' | 'kanban'>('calendar');
+
+  // Check if user has seen onboarding
+  useEffect(() => {
+    const hasSeenOnboarding = localStorage.getItem('hasSeenOnboarding');
+    if (!hasSeenOnboarding) {
+      setShowOnboarding(true);
+    }
+  }, []);
 
   const todayTasks = getTodayTasks();
   const completedThisWeek = tasks.filter(task => 
@@ -24,6 +39,11 @@ const Index = () => {
     task.updatedAt >= startOfWeek(new Date()) && 
     task.updatedAt <= endOfWeek(new Date())
   ).length;
+
+  const handleCompleteOnboarding = () => {
+    localStorage.setItem('hasSeenOnboarding', 'true');
+    setShowOnboarding(false);
+  };
 
   const handleToggleComplete = (id: string) => {
     const task = tasks.find(t => t.id === id);
@@ -36,7 +56,6 @@ const Index = () => {
 
   const handleEditTask = (task: any) => {
     console.log('Edit task:', task);
-    // TODO: Implement edit dialog
   };
 
   const filteredTasks = tasks.filter(task =>
@@ -56,9 +75,22 @@ const Index = () => {
     );
   };
 
+  const getTasksByStatus = (status: string) => {
+    return tasks.filter(task => task.status === status);
+  };
+
+  if (showOnboarding) {
+    return (
+      <OnboardingCarousel
+        onGetStarted={handleCompleteOnboarding}
+        onSkip={handleCompleteOnboarding}
+      />
+    );
+  }
+
   const renderTodayView = () => (
     <div className="space-y-6">
-      <div className="text-center py-8">
+      <div className="text-center py-4">
         <h1 className="text-2xl font-bold text-gray-900 mb-2">
           Welcome back! 👋
         </h1>
@@ -87,7 +119,14 @@ const Index = () => {
       </div>
 
       <div>
-        <h2 className="text-lg font-semibold mb-4">Today's Tasks</h2>
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-lg font-semibold">Today's Tasks</h2>
+          <div className="flex gap-2">
+            <Button size="sm" variant="outline">Schedule</Button>
+            <Button size="sm" variant="outline">Lists</Button>
+          </div>
+        </div>
+        
         {todayTasks.length === 0 ? (
           <Card>
             <CardContent className="p-8 text-center">
@@ -108,6 +147,26 @@ const Index = () => {
             ))}
           </div>
         )}
+      </div>
+
+      <div>
+        <h2 className="text-lg font-semibold mb-4">Upcoming Tasks</h2>
+        <div className="space-y-3">
+          {tasks.filter(t => t.dueDate && t.dueDate > new Date() && t.status !== 'completed').slice(0, 3).map(task => (
+            <TaskCard
+              key={task.id}
+              task={task}
+              onToggleComplete={handleToggleComplete}
+              onEdit={handleEditTask}
+              onDelete={deleteTask}
+            />
+          ))}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <TeamMembers />
+        <ActivityFeed />
       </div>
 
       <CreateTaskDialog onCreateTask={addTask} lists={lists} />
@@ -167,73 +226,123 @@ const Index = () => {
 
   const renderCalendarView = () => (
     <div className="space-y-4">
-      <h1 className="text-xl font-bold">Calendar</h1>
+      <div className="flex justify-between items-center">
+        <h1 className="text-xl font-bold">Calendar & Kanban</h1>
+        <div className="flex gap-2">
+          <Button
+            variant={calendarView === 'calendar' ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setCalendarView('calendar')}
+          >
+            <CalendarIcon className="w-4 h-4 mr-2" />
+            Calendar
+          </Button>
+          <Button
+            variant={calendarView === 'kanban' ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setCalendarView('kanban')}
+          >
+            <LayoutGrid className="w-4 h-4 mr-2" />
+            Kanban
+          </Button>
+        </div>
+      </div>
       
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-center">
-            {format(selectedDate, 'MMMM yyyy')}
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-7 gap-2 mb-4">
-            {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
-              <div key={day} className="text-center text-sm font-medium text-gray-500 py-2">
-                {day}
-              </div>
-            ))}
-          </div>
-          
-          <div className="grid grid-cols-7 gap-2">
-            {getCalendarWeek().map(date => {
-              const dayTasks = getTasksForDate(date);
-              return (
-                <button
-                  key={date.toISOString()}
-                  onClick={() => setSelectedDate(date)}
-                  className={cn(
-                    "p-2 rounded-lg text-sm transition-colors relative",
-                    isToday(date) && "bg-blue-100 text-blue-700 font-semibold",
-                    isSameDay(date, selectedDate) && "ring-2 ring-blue-500",
-                    !isToday(date) && "hover:bg-gray-100"
-                  )}
-                >
-                  {format(date, 'd')}
-                  {dayTasks.length > 0 && (
-                    <div className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></div>
-                  )}
-                </button>
-              );
-            })}
-          </div>
-        </CardContent>
-      </Card>
-
-      <div>
-        <h3 className="text-lg font-semibold mb-3">
-          Tasks for {format(selectedDate, 'MMM d, yyyy')}
-        </h3>
-        {getTasksForDate(selectedDate).length === 0 ? (
+      {calendarView === 'calendar' ? (
+        <>
           <Card>
-            <CardContent className="p-6 text-center">
-              <CalendarIcon className="w-12 h-12 text-gray-300 mx-auto mb-2" />
-              <p className="text-gray-600">No tasks scheduled for this date</p>
+            <CardHeader>
+              <CardTitle className="text-center">
+                {format(selectedDate, 'MMMM yyyy')}
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-7 gap-2 mb-4">
+                {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
+                  <div key={day} className="text-center text-sm font-medium text-gray-500 py-2">
+                    {day}
+                  </div>
+                ))}
+              </div>
+              
+              <div className="grid grid-cols-7 gap-2">
+                {getCalendarWeek().map(date => {
+                  const dayTasks = getTasksForDate(date);
+                  return (
+                    <button
+                      key={date.toISOString()}
+                      onClick={() => setSelectedDate(date)}
+                      className={cn(
+                        "p-2 rounded-lg text-sm transition-colors relative",
+                        isToday(date) && "bg-blue-100 text-blue-700 font-semibold",
+                        isSameDay(date, selectedDate) && "ring-2 ring-blue-500",
+                        !isToday(date) && "hover:bg-gray-100"
+                      )}
+                    >
+                      {format(date, 'd')}
+                      {dayTasks.length > 0 && (
+                        <div className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></div>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
             </CardContent>
           </Card>
-        ) : (
-          <div className="space-y-3">
-            {getTasksForDate(selectedDate).map(task => (
-              <TaskCard
-                key={task.id}
-                task={task}
-                onToggleComplete={handleToggleComplete}
-                onEdit={handleEditTask}
-                onDelete={deleteTask}
-              />
-            ))}
+
+          <div>
+            <h3 className="text-lg font-semibold mb-3">
+              Tasks for {format(selectedDate, 'MMM d, yyyy')}
+            </h3>
+            {getTasksForDate(selectedDate).length === 0 ? (
+              <Card>
+                <CardContent className="p-6 text-center">
+                  <CalendarIcon className="w-12 h-12 text-gray-300 mx-auto mb-2" />
+                  <p className="text-gray-600">No tasks scheduled for this date</p>
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="space-y-3">
+                {getTasksForDate(selectedDate).map(task => (
+                  <TaskCard
+                    key={task.id}
+                    task={task}
+                    onToggleComplete={handleToggleComplete}
+                    onEdit={handleEditTask}
+                    onDelete={deleteTask}
+                  />
+                ))}
+              </div>
+            )}
           </div>
-        )}
-      </div>
+        </>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {['todo', 'in-progress', 'completed'].map(status => (
+            <Card key={status}>
+              <CardHeader>
+                <CardTitle className="text-sm font-medium">
+                  {status === 'todo' ? 'To Do' : status === 'in-progress' ? 'In Progress' : 'Completed'}
+                  <Badge variant="secondary" className="ml-2">
+                    {getTasksByStatus(status).length}
+                  </Badge>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {getTasksByStatus(status).map(task => (
+                  <TaskCard
+                    key={task.id}
+                    task={task}
+                    onToggleComplete={handleToggleComplete}
+                    onEdit={handleEditTask}
+                    onDelete={deleteTask}
+                  />
+                ))}
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
     </div>
   );
 
@@ -280,6 +389,8 @@ const Index = () => {
       case 'tasks': return renderTasksView();
       case 'calendar': return renderCalendarView();
       case 'lists': return renderListsView();
+      case 'files': return <FileManager />;
+      case 'settings': return <SettingsScreen />;
       default: return renderTodayView();
     }
   };
